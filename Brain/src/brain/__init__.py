@@ -5,6 +5,8 @@ import socket
 import random
 from torch.utils.tensorboard import SummaryWriter
 import os
+import argparse
+from datetime import datetime
 
 torch.set_default_device("cpu")
 
@@ -19,7 +21,7 @@ BATCH_SIZE = 128
 GAMMA = 0.99
 TARGET_UPDATE_FREQUENCY = 5
 
-writer = SummaryWriter('runs/balance_experiment_1')
+writer = SummaryWriter('runs/balance_experiment_2')
 
 class Model(torch.nn.Module):
     def __init__(self, *args, **kwargs):
@@ -69,6 +71,15 @@ def optimize_model(model:Model, target_model:Model, optimiser:torch.optim.Adam, 
 
 
 def main() -> None:
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--new", action="store_true", help="Start new training", default=False)
+    parser.add_argument("--old", action="store_true", help="Continue training", default=False)
+    args = parser.parse_args()
+
+    if args.old:
+        args.new = False
+
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((HOST, PORT))
     server.listen(1)
@@ -77,15 +88,21 @@ def main() -> None:
 
     last_state = None
     last_action = None
-    best_session_reward = 12575.0
+    best_session_reward = 52500.0
     session_reward = 0.0
 
     model = Model()
 
     if os.path.exists("best_model.pth"):
-        model.load_state_dict(torch.load("best_model.pth"))
-        epsilon = EPSILON_MIN
-        print("Loaded best model")
+
+        if args.new:
+            os.rename("best_model.pth", f"best_model_old_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pth")
+            print("Starting new training")
+        else:
+            print("Continuing training")
+            model.load_state_dict(torch.load("best_model.pth"))
+            epsilon = EPSILON_MIN
+            print("Loaded best model")
 
     target_model = Model()
     target_model.load_state_dict(model.state_dict())
@@ -128,6 +145,11 @@ def main() -> None:
                 memory.append((last_state, last_action, reward, state, death_flag))
 
             loss = optimize_model(model, target_model, optimiser, memory)
+
+            if session_reward > best_session_reward and session_reward % 500 == 0:
+                best_session_reward = session_reward
+                print(f"New best session reward: {best_session_reward}")
+                torch.save(model.state_dict(), "best_model.pth")
 
             if death_flag == 1:
                 last_state = None
