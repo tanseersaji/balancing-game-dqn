@@ -1,0 +1,13 @@
+Being.app
+Being_BackUpThisFolder_ButDontShipItWithYourGame
+.vscode
+.DS_Store
+Library/
+Logs/
+Temp/
+UserSettings/
+ProjectSettings/
+*.pth
+.venv
+__pycache__
+Brain/runs
